@@ -26,3 +26,7 @@ output "dynamodb_table_arn" {
   description = "ARN of the DynamoDB table storing application tasks"
   value       = aws_dynamodb_table.tasks.arn
 }
+output "lambda_execution_role_arn" {
+  description = "ARN of the IAM role used by the Lambda function"
+  value       = aws_iam_role.lambda_execution.arn
+}

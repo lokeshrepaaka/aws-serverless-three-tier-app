@@ -20,3 +20,6 @@ Thumbs.db
 
 # Deployment packages
 *.zip
+
+request*.json
+response*.json
