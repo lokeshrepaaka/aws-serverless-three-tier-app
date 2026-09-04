@@ -4,6 +4,7 @@ import uuid
 from datetime import datetime, timezone
 
 import boto3
+from botocore.exceptions import ClientError
 
 
 # --------------------------------------------------
@@ -137,19 +138,36 @@ def lambda_handler(event, context):
                     }
                 )
 
-            response = table.update_item(
-                Key={
-                    "task_id": task_id
-                },
+            try:
+                response = table.update_item(
+                    Key={
+                        "task_id": task_id
+                    },
 
-                UpdateExpression="SET completed = :completed",
+                    UpdateExpression="SET completed = :completed",
 
-                ExpressionAttributeValues={
-                    ":completed": True
-                },
+                    ExpressionAttributeValues={
+                        ":completed": True
+                    },
 
-                ReturnValues="ALL_NEW"
-            )
+                    ConditionExpression="attribute_exists(task_id)",
+
+                    ReturnValues="ALL_NEW"
+                )
+
+            except ClientError as error:
+                if (
+                    error.response["Error"]["Code"]
+                    == "ConditionalCheckFailedException"
+                ):
+                    return build_response(
+                        404,
+                        {
+                            "message": "Task not found."
+                        }
+                    )
+
+                raise
 
             return build_response(
                 200,
