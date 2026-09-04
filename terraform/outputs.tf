@@ -17,3 +17,12 @@ output "cloudfront_domain_name" {
   description = "CloudFront domain name for the frontend"
   value       = aws_cloudfront_distribution.frontend.domain_name
 }
+output "dynamodb_table_name" {
+  description = "Name of the DynamoDB table storing application tasks"
+  value       = aws_dynamodb_table.tasks.name
+}
+
+output "dynamodb_table_arn" {
+  description = "ARN of the DynamoDB table storing application tasks"
+  value       = aws_dynamodb_table.tasks.arn
+}
