@@ -4,12 +4,137 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Serverless Three-Tier App</title>
+    <title>Serverless Task Tracker</title>
 </head>
 
 <body>
-    <h1>AWS Serverless Three-Tier App</h1>
-    <p>Frontend successfully delivered through CloudFront and private S3.</p>
+    <h1>AWS Serverless Three-Tier Task Tracker</h1>
+
+    <p>
+        Frontend: S3 + CloudFront |
+        Backend: API Gateway + Lambda |
+        Database: DynamoDB
+    </p>
+
+    <hr>
+
+    <h2>Create Task</h2>
+
+    <input type="text" id="taskTitle" placeholder="Enter a task">
+
+    <button onclick="createTask()">
+        Add Task
+    </button>
+
+    <p id="message"></p>
+
+    <hr>
+
+    <h2>Tasks</h2>
+
+    <button onclick="loadTasks()">
+        Refresh Tasks
+    </button>
+
+    <ul id="taskList"></ul>
+
+    <script>
+        const API_URL =
+            "https://ro08n8xb7l.execute-api.us-east-1.amazonaws.com/tasks";
+
+
+        async function loadTasks() {
+            const taskList = document.getElementById("taskList");
+            const message = document.getElementById("message");
+
+            try {
+                message.textContent = "Loading tasks...";
+
+                const response = await fetch(API_URL);
+
+                if (!response.ok) {
+                    throw new Error("Failed to load tasks");
+                }
+
+                const data = await response.json();
+
+                taskList.innerHTML = "";
+
+                data.tasks.forEach(task => {
+                    const listItem = document.createElement("li");
+
+                    listItem.textContent =
+                        `${task.title} - ${task.completed ? "Completed" : "Pending"}`;
+
+                    taskList.appendChild(listItem);
+                });
+
+                message.textContent =
+                    `Loaded ${data.tasks.length} task(s).`;
+
+            } catch (error) {
+                console.error(error);
+
+                message.textContent =
+                    "Error loading tasks.";
+            }
+        }
+
+
+        async function createTask() {
+            const taskInput = document.getElementById("taskTitle");
+            const message = document.getElementById("message");
+
+            const title = taskInput.value.trim();
+
+            if (!title) {
+                message.textContent =
+                    "Please enter a task title.";
+
+                return;
+            }
+
+            try {
+                message.textContent =
+                    "Creating task...";
+
+                const response = await fetch(API_URL, {
+                    method: "POST",
+
+                    headers: {
+                        "Content-Type": "application/json"
+                    },
+
+                    body: JSON.stringify({
+                        title: title
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error("Failed to create task");
+                }
+
+                const data = await response.json();
+
+                message.textContent =
+                    data.message;
+
+                taskInput.value = "";
+
+                await loadTasks();
+
+            } catch (error) {
+                console.error(error);
+
+                message.textContent =
+                    "Error creating task.";
+            }
+        }
+
+
+        loadTasks();
+    </script>
+
 </body>
 
 </html>
