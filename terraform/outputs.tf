@@ -30,3 +30,8 @@ output "lambda_execution_role_arn" {
   description = "ARN of the IAM role used by the Lambda function"
   value       = aws_iam_role.lambda_execution.arn
 }
+
+output "api_endpoint" {
+  description = "Base URL of the API Gateway HTTP API"
+  value       = aws_apigatewayv2_api.tasks.api_endpoint
+}
