@@ -6,13 +6,19 @@ from datetime import datetime, timezone
 import boto3
 
 
-# Read the DynamoDB table name from the Lambda environment variable.
+# --------------------------------------------------
+# DynamoDB configuration
+# --------------------------------------------------
+
 TABLE_NAME = os.environ["TABLE_NAME"]
 
-# Create a DynamoDB resource and reference our Tasks table.
 dynamodb = boto3.resource("dynamodb")
 table = dynamodb.Table(TABLE_NAME)
 
+
+# --------------------------------------------------
+# Helper function
+# --------------------------------------------------
 
 def build_response(status_code, body):
     """
@@ -27,26 +33,39 @@ def build_response(status_code, body):
     }
 
 
+# --------------------------------------------------
+# Lambda handler
+# --------------------------------------------------
+
 def lambda_handler(event, context):
     """
     Main Lambda entry point.
 
-    API Gateway will eventually send requests here.
-    We inspect the HTTP method and perform the appropriate
-    DynamoDB operation.
+    Supported operations:
+
+    GET    /tasks
+    POST   /tasks
+    PATCH  /tasks/{task_id}
+    DELETE /tasks/{task_id}
     """
 
     try:
-        http_method = event.get("requestContext", {}).get("http", {}).get("method")
+        # API Gateway HTTP API payload v2.0
+        http_method = (
+            event.get("requestContext", {})
+            .get("http", {})
+            .get("method")
+        )
 
-        # Temporary direct-Lambda testing support.
+        # Allows us to test the Lambda directly as well.
         if not http_method:
             http_method = event.get("httpMethod")
 
-        # -----------------------------
+
+        # --------------------------------------------------
         # GET /tasks
-        # Return all tasks
-        # -----------------------------
+        # --------------------------------------------------
+
         if http_method == "GET":
             response = table.scan()
 
@@ -57,10 +76,11 @@ def lambda_handler(event, context):
                 }
             )
 
-        # -----------------------------
+
+        # --------------------------------------------------
         # POST /tasks
-        # Create a new task
-        # -----------------------------
+        # --------------------------------------------------
+
         if http_method == "POST":
             body = json.loads(event.get("body") or "{}")
 
@@ -81,7 +101,9 @@ def lambda_handler(event, context):
                 "created_at": datetime.now(timezone.utc).isoformat()
             }
 
-            table.put_item(Item=task)
+            table.put_item(
+                Item=task
+            )
 
             return build_response(
                 201,
@@ -91,12 +113,105 @@ def lambda_handler(event, context):
                 }
             )
 
+
+        # --------------------------------------------------
+        # Read task_id from URL
+        # --------------------------------------------------
+
+        path_parameters = event.get("pathParameters") or {}
+
+        task_id = path_parameters.get("task_id")
+
+
+        # --------------------------------------------------
+        # PATCH /tasks/{task_id}
+        # --------------------------------------------------
+
+        if http_method == "PATCH":
+
+            if not task_id:
+                return build_response(
+                    400,
+                    {
+                        "message": "Task ID is required."
+                    }
+                )
+
+            response = table.update_item(
+                Key={
+                    "task_id": task_id
+                },
+
+                UpdateExpression="SET completed = :completed",
+
+                ExpressionAttributeValues={
+                    ":completed": True
+                },
+
+                ReturnValues="ALL_NEW"
+            )
+
+            return build_response(
+                200,
+                {
+                    "message": "Task marked as completed.",
+                    "task": response.get("Attributes")
+                }
+            )
+
+
+        # --------------------------------------------------
+        # DELETE /tasks/{task_id}
+        # --------------------------------------------------
+
+        if http_method == "DELETE":
+
+            if not task_id:
+                return build_response(
+                    400,
+                    {
+                        "message": "Task ID is required."
+                    }
+                )
+
+            response = table.delete_item(
+                Key={
+                    "task_id": task_id
+                },
+
+                ReturnValues="ALL_OLD"
+            )
+
+            deleted_task = response.get("Attributes")
+
+            if not deleted_task:
+                return build_response(
+                    404,
+                    {
+                        "message": "Task not found."
+                    }
+                )
+
+            return build_response(
+                200,
+                {
+                    "message": "Task deleted successfully.",
+                    "task": deleted_task
+                }
+            )
+
+
+        # --------------------------------------------------
+        # Unsupported HTTP method
+        # --------------------------------------------------
+
         return build_response(
             405,
             {
                 "message": "Method not allowed."
             }
         )
+
 
     except Exception as error:
         print(f"Error: {error}")

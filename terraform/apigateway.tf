@@ -12,6 +12,8 @@ resource "aws_apigatewayv2_api" "tasks" {
     allow_methods = [
       "GET",
       "POST",
+      "PATCH",
+      "DELETE",
       "OPTIONS"
     ]
 
@@ -89,4 +91,27 @@ resource "aws_lambda_permission" "api_gateway" {
   principal     = "apigateway.amazonaws.com"
 
   source_arn = "${aws_apigatewayv2_api.tasks.execution_arn}/*/*"
+}
+
+# --------------------------------------------------
+# PATCH /tasks/{task_id}
+# --------------------------------------------------
+
+resource "aws_apigatewayv2_route" "patch_task" {
+  api_id = aws_apigatewayv2_api.tasks.id
+
+  route_key = "PATCH /tasks/{task_id}"
+  target    = "integrations/${aws_apigatewayv2_integration.tasks.id}"
+}
+
+
+# --------------------------------------------------
+# DELETE /tasks/{task_id}
+# --------------------------------------------------
+
+resource "aws_apigatewayv2_route" "delete_task" {
+  api_id = aws_apigatewayv2_api.tasks.id
+
+  route_key = "DELETE /tasks/{task_id}"
+  target    = "integrations/${aws_apigatewayv2_integration.tasks.id}"
 }

@@ -63,8 +63,43 @@
                 data.tasks.forEach(task => {
                     const listItem = document.createElement("li");
 
-                    listItem.textContent =
-                        `${task.title} - ${task.completed ? "Completed" : "Pending"}`;
+                    const taskText = document.createElement("span");
+
+                    taskText.textContent =
+                        `${task.title} - ${task.completed ? "Completed" : "Pending"} `;
+
+                    listItem.appendChild(taskText);
+
+
+                    // Only show the Complete button
+                    // when the task is still pending.
+                    if (!task.completed) {
+                        const completeButton =
+                            document.createElement("button");
+
+                        completeButton.textContent =
+                            "Complete";
+
+                        completeButton.onclick = function () {
+                            completeTask(task.task_id);
+                        };
+
+                        listItem.appendChild(completeButton);
+                    }
+
+
+                    // Every task can be deleted.
+                    const deleteButton =
+                        document.createElement("button");
+
+                    deleteButton.textContent =
+                        "Delete";
+
+                    deleteButton.onclick = function () {
+                        deleteTask(task.task_id);
+                    };
+
+                    listItem.appendChild(deleteButton);
 
                     taskList.appendChild(listItem);
                 });
@@ -82,10 +117,14 @@
 
 
         async function createTask() {
-            const taskInput = document.getElementById("taskTitle");
-            const message = document.getElementById("message");
+            const taskInput =
+                document.getElementById("taskTitle");
 
-            const title = taskInput.value.trim();
+            const message =
+                document.getElementById("message");
+
+            const title =
+                taskInput.value.trim();
 
             if (!title) {
                 message.textContent =
@@ -114,12 +153,14 @@
                     throw new Error("Failed to create task");
                 }
 
-                const data = await response.json();
+                const data =
+                    await response.json();
 
                 message.textContent =
                     data.message;
 
-                taskInput.value = "";
+                taskInput.value =
+                    "";
 
                 await loadTasks();
 
@@ -128,6 +169,82 @@
 
                 message.textContent =
                     "Error creating task.";
+            }
+        }
+
+
+        async function completeTask(taskId) {
+            const message =
+                document.getElementById("message");
+
+            try {
+                message.textContent =
+                    "Updating task...";
+
+                const response = await fetch(
+                    `${API_URL}/${taskId}`,
+                    {
+                        method: "PATCH"
+                    }
+                );
+
+                if (!response.ok) {
+                    throw new Error(
+                        "Failed to update task"
+                    );
+                }
+
+                const data =
+                    await response.json();
+
+                message.textContent =
+                    data.message;
+
+                await loadTasks();
+
+            } catch (error) {
+                console.error(error);
+
+                message.textContent =
+                    "Error updating task.";
+            }
+        }
+
+
+        async function deleteTask(taskId) {
+            const message =
+                document.getElementById("message");
+
+            try {
+                message.textContent =
+                    "Deleting task...";
+
+                const response = await fetch(
+                    `${API_URL}/${taskId}`,
+                    {
+                        method: "DELETE"
+                    }
+                );
+
+                if (!response.ok) {
+                    throw new Error(
+                        "Failed to delete task"
+                    );
+                }
+
+                const data =
+                    await response.json();
+
+                message.textContent =
+                    data.message;
+
+                await loadTasks();
+
+            } catch (error) {
+                console.error(error);
+
+                message.textContent =
+                    "Error deleting task.";
             }
         }
 
