@@ -1,8 +1,9 @@
 data "archive_file" "lambda_package" {
   type = "zip"
 
-  source_file = "${path.module}/../backend/lambda_function.py"
-  output_path = "${path.module}/lambda_function.zip"
+  source_file      = "${path.module}/../backend/lambda_function.py"
+  output_path      = "${path.module}/lambda_function.zip"
+  output_file_mode = "0644"
 }
 
 resource "aws_lambda_function" "tasks" {
