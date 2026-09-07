@@ -2,7 +2,7 @@
     "Version": "2012-10-17",
     "Statement": [
         {
-            "Sid": "ManageProjectS3",
+            "Sid": "ManageFrontendBucket",
             "Effect": "Allow",
             "Action": [
                 "s3:CreateBucket",
@@ -29,12 +29,46 @@
                 "s3:GetReplicationConfiguration",
                 "s3:GetBucketObjectLockConfiguration",
                 "s3:ListBucket",
-                "s3:GetObject",
-                "s3:PutObject",
-                "s3:DeleteObject",
                 "s3:GetAccelerateConfiguration"
             ],
-            "Resource": "*"
+            "Resource": "arn:aws:s3:::serverless-three-tier-dev-frontend-1cc456121e173a894d36b910ea"
+        },
+        {
+            "Sid": "ManageFrontendObjects",
+            "Effect": "Allow",
+            "Action": [
+                "s3:GetObject",
+                "s3:PutObject",
+                "s3:DeleteObject"
+            ],
+            "Resource": "arn:aws:s3:::serverless-three-tier-dev-frontend-1cc456121e173a894d36b910ea/*"
+        },
+        {
+            "Sid": "AccessTerraformStateBucket",
+            "Effect": "Allow",
+            "Action": [
+                "s3:ListBucket"
+            ],
+            "Resource": "arn:aws:s3:::serverless-three-tier-terraform-state-585008089387"
+        },
+        {
+            "Sid": "ManageTerraformStateObject",
+            "Effect": "Allow",
+            "Action": [
+                "s3:GetObject",
+                "s3:PutObject"
+            ],
+            "Resource": "arn:aws:s3:::serverless-three-tier-terraform-state-585008089387/serverless-three-tier/dev/terraform.tfstate"
+        },
+        {
+            "Sid": "ManageTerraformStateLock",
+            "Effect": "Allow",
+            "Action": [
+                "s3:GetObject",
+                "s3:PutObject",
+                "s3:DeleteObject"
+            ],
+            "Resource": "arn:aws:s3:::serverless-three-tier-terraform-state-585008089387/serverless-three-tier/dev/terraform.tfstate.tflock"
         },
         {
             "Sid": "ManageProjectCloudFront",
@@ -197,27 +231,6 @@
                 "cognito-idp:UntagResource"
             ],
             "Resource": "*"
-        },
-        {
-            "Sid": "ListTerraformStateBucket",
-            "Effect": "Allow",
-            "Action": [
-                "s3:ListBucket"
-            ],
-            "Resource": "arn:aws:s3:::serverless-three-tier-terraform-state-585008089387"
-        },
-        {
-            "Sid": "ManageTerraformRemoteState",
-            "Effect": "Allow",
-            "Action": [
-                "s3:GetObject",
-                "s3:PutObject",
-                "s3:DeleteObject"
-            ],
-            "Resource": [
-                "arn:aws:s3:::serverless-three-tier-terraform-state-585008089387/serverless-three-tier/dev/terraform.tfstate",
-                "arn:aws:s3:::serverless-three-tier-terraform-state-585008089387/serverless-three-tier/dev/terraform.tfstate.tflock"
-            ]
         }
     ]
 }
