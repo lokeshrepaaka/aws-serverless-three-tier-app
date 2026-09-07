@@ -7,7 +7,7 @@ resource "aws_apigatewayv2_api" "tasks" {
   protocol_type = "HTTP"
 
   cors_configuration {
-    allow_origins = ["*"]
+    allow_origins = ["https://${aws_cloudfront_distribution.frontend.domain_name}"]
 
     allow_methods = [
       "GET",
