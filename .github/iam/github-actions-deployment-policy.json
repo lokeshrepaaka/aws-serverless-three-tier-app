@@ -197,6 +197,27 @@
                 "cognito-idp:UntagResource"
             ],
             "Resource": "*"
+        },
+        {
+            "Sid": "ListTerraformStateBucket",
+            "Effect": "Allow",
+            "Action": [
+                "s3:ListBucket"
+            ],
+            "Resource": "arn:aws:s3:::serverless-three-tier-terraform-state-585008089387"
+        },
+        {
+            "Sid": "ManageTerraformRemoteState",
+            "Effect": "Allow",
+            "Action": [
+                "s3:GetObject",
+                "s3:PutObject",
+                "s3:DeleteObject"
+            ],
+            "Resource": [
+                "arn:aws:s3:::serverless-three-tier-terraform-state-585008089387/serverless-three-tier/dev/terraform.tfstate",
+                "arn:aws:s3:::serverless-three-tier-terraform-state-585008089387/serverless-three-tier/dev/terraform.tfstate.tflock"
+            ]
         }
     ]
 }
