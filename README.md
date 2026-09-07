@@ -1,215 +1,138 @@
+☁️ AWS Serverless Three-Tier Task Tracker
 
+A secure, multi-user task management application built with a serverless three-tier architecture on AWS. The project demonstrates Cloud/DevOps practices including Terraform Infrastructure as Code, GitHub Actions CI/CD, OIDC authentication, Cognito JWT authorization, remote state locking, and CloudWatch observability.
 
+🌐 Live Application · 🏗️ Architecture · ⚙️ CI/CD
 
-AWS Serverless Three-Tier Task Tracker
-A production-style serverless web application built on AWS using Terraform, GitHub Actions, Cognito authentication, and a fully serverless three-tier architecture.
-
-The application lets users create accounts, verify their email, sign in securely, and manage private tasks. Each user's tasks are isolated using the Cognito JWT sub claim and enforced in the Lambda/DynamoDB application layer.
-
-Live Application
-Frontend: https://d3ql7kg50manzy.cloudfront.net
-
-This project is intended as a Cloud/DevOps portfolio project and may be taken offline when not actively demonstrated to avoid unnecessary AWS costs.
+Portfolio project: The live AWS environment may occasionally be unavailable when not being demonstrated to avoid unnecessary cloud costs.
 
 Architecture
 
 
+
 Request Flow
-The browser loads the frontend through Amazon CloudFront.
 
-CloudFront serves the application from a private S3 origin.
+CloudFront serves the frontend from a private S3 bucket.
 
-Users register and authenticate with Amazon Cognito.
+Amazon Cognito handles registration, email verification, and authentication.
 
-The frontend sends the Cognito access token in the Authorization header.
+The browser sends the Cognito JWT to API Gateway.
 
-API Gateway validates the JWT before forwarding the request.
+API Gateway validates the JWT before invoking Lambda.
 
-Lambda extracts the verified Cognito sub claim and uses it as the task owner ID.
+Lambda performs task CRUD operations against DynamoDB.
 
-DynamoDB stores task data, and Lambda restricts reads and mutations to the authenticated owner.
+The Cognito sub is stored as owner_id, keeping each user's tasks isolated.
 
-AWS Services
-Service	Purpose
-Amazon S3	Hosts the private frontend and stores Terraform remote state
-Amazon CloudFront	Secure CDN and public entry point for the frontend
-Amazon Cognito	User registration, email verification, and authentication
-Amazon API Gateway	HTTP API and JWT authorization
-AWS Lambda	Python application logic for task CRUD operations
-Amazon DynamoDB	Serverless task storage
-AWS IAM	Runtime permissions, Terraform deployment permissions, and GitHub OIDC role
-Amazon CloudWatch	Application/API logs and operational alarms
-Features
-User self-registration
+Key Features
 
-Email verification with Cognito
+🔐 Cognito signup, email verification, login, and JWT authentication
 
-Secure sign-in and sign-out
+👥 Per-user task isolation enforced in the backend
 
-JWT-protected API routes
+⚡ Serverless task CRUD API with API Gateway + Lambda
 
-Create, read, complete, and delete tasks
+🌐 Private S3 frontend delivered globally through CloudFront
 
-Per-user task isolation
+🏗️ AWS infrastructure managed with Terraform
 
-Responsive frontend
+🚀 GitHub Actions CI/CD with secretless AWS OIDC authentication
 
-Private S3 frontend origin
+🔒 Remote Terraform state with S3 native state locking
 
-CloudFront distribution
+📊 CloudWatch logs, error alarms, and throttle alarms
 
-Restricted API CORS
+🛡️ Restricted CORS and separated deployment/runtime IAM permissions
 
-CloudWatch logging
+Tech Stack
 
-Lambda error and throttle alarms
+Area
 
-Terraform-managed AWS infrastructure
+Technologies
 
-S3 remote Terraform state
+☁️ Cloud
 
-Native Terraform state locking
+AWS
 
-GitHub Actions CI/CD
+🎨 Frontend
 
-Secretless GitHub-to-AWS authentication using OIDC
+HTML, CSS, JavaScript
 
-Controlled Terraform apply through manual workflow dispatch
+⚙️ Backend
 
-Security Design
-Cognito Authentication
-The frontend uses an Amazon Cognito User Pool. Users create an account with an email address, verify the account using an emailed confirmation code, and then authenticate before using the task API.
+Python, AWS Lambda
 
-The browser application uses a Cognito App Client without a client secret because a browser cannot securely protect a static secret.
+🔗 API
 
-JWT Authorization
-All task routes are protected by an API Gateway JWT authorizer.
+Amazon API Gateway HTTP API
 
-Protected routes:
+🗄️ Database
 
-GET    /tasks
-POST   /tasks
-PATCH  /tasks/{task_id}
-DELETE /tasks/{task_id}
-Requests must contain a valid Cognito access token.
+Amazon DynamoDB
 
-Per-User Data Isolation
-Authentication alone is not enough for a multi-user application. Lambda extracts the verified Cognito sub claim from API Gateway's JWT context and stores it as owner_id on each task.
+🔐 Authentication
 
-The backend then enforces ownership on all task operations:
+Amazon Cognito + JWT
 
-Authenticated Cognito user
-          │
-          ▼
-      JWT "sub"
-          │
-          ▼
-       owner_id
-          │
-          ▼
-     DynamoDB task
-This prevents one authenticated user from reading, updating, or deleting another user's tasks.
+🏗️ Infrastructure
 
-IAM Separation
-The project separates deployment permissions from application runtime permissions.
+Terraform
 
-Lambda execution role: only the permissions required by the running application.
+🚀 CI/CD
 
-GitHub Actions role: temporary deployment credentials assumed through OIDC.
+GitHub Actions + AWS OIDC
 
-Local Terraform identity: used during local infrastructure development.
+📊 Monitoring
 
-No long-lived AWS access keys are stored in GitHub.
+Amazon CloudWatch
 
-Infrastructure as Code
-All AWS infrastructure is managed using Terraform.
+Security & Multi-User Authorization
 
-Terraform manages resources including:
+Authentication is handled by Amazon Cognito, while API Gateway protects every task route with a JWT authorizer.
 
-S3 frontend infrastructure
+Lambda does not trust an owner ID supplied by the browser. Instead, it reads the verified Cognito sub claim and stores it as owner_id on each task. GET, PATCH, and DELETE operations enforce that ownership so authenticated users cannot access another user's tasks.
 
-CloudFront distribution
+Cognito User → JWT → API Gateway → Lambda → owner_id → DynamoDB
 
-DynamoDB table
-
-Lambda function and execution role
-
-API Gateway HTTP API
-
-Cognito User Pool and App Client
-
-CloudWatch log groups
-
-CloudWatch alarms
-
-The AWS provider and Archive provider are version-constrained in Terraform.
-
-Remote Terraform State
-Terraform state is stored remotely in a private S3 bucket:
-
-serverless-three-tier-terraform-state-585008089387
-State key:
-
-serverless-three-tier/dev/terraform.tfstate
-The backend uses:
-
-S3 server-side encryption
-
-S3 versioning
-
-Terraform native S3 lock files
-
-Remote state prevents the project from depending on one developer workstation and allows CI/CD and local Terraform to work against the same state safely.
+Additional security controls include a private S3 frontend origin, CloudFront Origin Access Control, restricted API CORS, IAM role separation, and no long-lived AWS credentials stored in GitHub.
 
 CI/CD Pipeline
-GitHub Actions authenticates to AWS using OpenID Connect instead of stored AWS access keys.
 
-GitHub Push / Manual Run
-          │
-          ▼
-    GitHub Actions
-          │
-          ▼
-     GitHub OIDC
-          │
-          ▼
-       AWS IAM
-          │
-          ▼
-       Terraform
-On Push to main
-The workflow runs:
+GitHub Actions authenticates to AWS through OpenID Connect (OIDC) and assumes a dedicated IAM role using temporary credentials.
 
-terraform fmt -check
-terraform init
-terraform validate
-terraform plan
-A normal push performs validation and planning but does not automatically apply infrastructure changes.
+Push to main
+   ↓
+fmt → init → validate → plan
+   ↓
+No automatic apply
 
-Manual Deployment
-A manually triggered workflow_dispatch run performs the same checks and then executes:
+Manual workflow_dispatch
+   ↓
+plan → controlled apply
 
-terraform apply -auto-approve tfplan
-The saved Terraform plan is applied so the deployment uses the exact infrastructure changes that were reviewed during the workflow.
+This keeps infrastructure changes reviewable while still providing an automated deployment workflow.
 
-Repository Structure
+Infrastructure as Code
+
+Terraform provisions and manages the application's AWS infrastructure, including:
+
+S3 · CloudFront · Cognito · API Gateway · Lambda · DynamoDB · IAM · CloudWatch
+
+Terraform state is stored in a private, encrypted, versioned S3 backend with native S3 state locking. Local Terraform and GitHub Actions therefore work against the same protected state.
+
+Project Structure
+
 aws-serverless-three-tier-app/
-│
 ├── .github/
 │   ├── iam/
-│   │   ├── github-actions-deployment-policy.json
-│   │   └── github-actions-trust-policy.json
 │   └── workflows/
 │       └── deploy.yml
-│
 ├── backend/
 │   └── lambda_function.py
-│
 ├── diagrams/
-│
+│   └── aws-serverless-three-tier-architecture.png
 ├── frontend/
 │   └── index.html
-│
 ├── terraform/
 │   ├── alarms.tf
 │   ├── apigateway.tf
@@ -224,151 +147,55 @@ aws-serverless-three-tier-app/
 │   ├── providers.tf
 │   ├── s3.tf
 │   └── variables.tf
-│
 ├── .gitattributes
 ├── .gitignore
 └── README.md
-Local Terraform Workflow
-Set the AWS CLI profile for the PowerShell session:
 
-$env:AWS_PROFILE="serverless-dev"
-Run Terraform from the terraform directory:
+Validation
 
-cd terraform
-terraform init
-terraform fmt -check
-terraform validate
-terraform plan
-Infrastructure changes can then be reviewed before applying:
+The application has been tested for:
 
-terraform apply
-Frontend Deployment
-The frontend is uploaded to the private S3 bucket and served through CloudFront.
+Account creation, email verification, login, and logout
 
-Example deployment:
+Authenticated task create/read/complete/delete operations
 
-aws s3 cp frontend/index.html `
-  s3://serverless-three-tier-dev-frontend-1cc456121e173a894d36b910ea/index.html `
-  --content-type "text/html" `
-  --profile serverless-dev
-Invalidate the CloudFront cache after updating the frontend:
+Rejection of unauthenticated API requests
 
-aws cloudfront create-invalidation `
-  --distribution-id E22ODV22PZU871 `
-  --paths "/*" `
-  --profile serverless-dev
-Testing
-The application was tested across the complete authentication and task flow:
+Two-user data isolation with separate Cognito accounts
 
-Account creation
+GitHub Actions OIDC authentication to AWS
 
-Email verification
+Terraform remote-state locking
 
-Sign-in
+Consistent Lambda packaging between Windows and GitHub Actions/Linux
 
-JWT-protected API access
-
-Create task
-
-Read tasks
-
-Complete task
-
-Delete task
-
-Sign-out
-
-Unauthorized requests rejected
-
-Two separate Cognito accounts tested
-
-User A cannot see User B's tasks
-
-User B cannot see User A's tasks
-
-Terraform remote state locking verified
-
-GitHub Actions OIDC authentication verified
-
-Local and CI-generated Lambda packages normalized for consistent Terraform hashes
-
-Final Terraform plan verified with no infrastructure drift
-
-Observability
-The project includes explicit CloudWatch log groups for:
-
-Lambda application logs
-
-API Gateway access logs
-
-CloudWatch alarms monitor:
-
-Lambda errors
-
-Lambda throttling
-
-Log retention is managed through Terraform.
+Zero-drift Terraform planning (No changes)
 
 Engineering Challenges Solved
-Cross-Platform Lambda Packaging
-Terraform packages the Lambda source using the Archive provider. Windows CRLF line endings originally produced a different ZIP checksum from the Linux-based GitHub Actions runner.
 
-The repository now enforces LF line endings with .gitattributes, and the repository-local Git configuration avoids automatic CRLF conversion. This keeps Lambda package hashes consistent between local development and CI/CD.
+Cross-platform Lambda packaging — Windows CRLF line endings initially produced a different Lambda ZIP checksum from GitHub's Linux runner. LF normalization and .gitattributes made packaging deterministic.
 
-Terraform State Concurrency
-Remote Terraform state uses S3 native lock files. When GitHub Actions held the state lock during a plan, a simultaneous local Terraform operation was correctly blocked rather than allowing concurrent state operations.
+Terraform state concurrency — S3 native state locking correctly prevents simultaneous local and CI Terraform operations from modifying the same state.
 
-Cognito Partial Apply Recovery
-During Cognito provisioning, a resource was created before Terraform encountered an IAM read-permission failure. The resource state and taint status were inspected before continuing rather than blindly recreating the user pool.
+Cognito provisioning recovery — A partial Terraform apply was diagnosed through state/taint inspection instead of unnecessarily recreating the user pool.
 
-GitHub OIDC Subject Format
-The repository uses GitHub's immutable OIDC subject format for newly created repositories, allowing the AWS IAM trust policy to restrict role assumption to this specific repository and branch.
+GitHub OIDC trust — The IAM trust policy uses GitHub's repository-specific immutable OIDC subject so AWS deployments do not require stored access keys.
 
-Design Decisions
-Why serverless?
-The application does not require always-on servers. API Gateway, Lambda, DynamoDB, Cognito, S3, and CloudFront provide a scalable architecture with minimal infrastructure administration.
+Future Improvements
 
-Why Terraform?
-Infrastructure is repeatable, reviewable, version-controlled, and deployable through CI/CD.
-
-Why OIDC for GitHub Actions?
-OIDC eliminates the need to store long-lived AWS credentials as GitHub secrets.
-
-Why controlled apply instead of applying every push?
-A push can automatically validate and preview infrastructure changes while production-changing Terraform apply remains an intentional action.
-
-Why Cognito sub for ownership?
-The sub claim is an immutable identity generated by Cognito and is safer for authorization than trusting an owner ID supplied by the browser.
-
-Potential Future Improvements
-Replace the filtered DynamoDB scan with an access pattern optimized around user ownership
+Optimize DynamoDB access around user ownership instead of a filtered scan
 
 Add API-level 5XX monitoring
 
 Add GitHub Environment approval before Terraform apply
 
-Tighten remaining deployment IAM permissions further
+Add automated application tests
 
-Add automated backend/frontend tests
+Add a custom domain
 
-Add a custom domain and HTTPS certificate
-
-Move the frontend build/deployment into the CI/CD workflow
-
-Use Cognito managed login with OAuth 2.0 Authorization Code + PKCE
-
-What This Project Demonstrates
-This project demonstrates practical experience with:
-
-AWS: S3, CloudFront, Lambda, API Gateway, DynamoDB, Cognito, IAM, CloudWatch
-Infrastructure as Code: Terraform
-CI/CD: GitHub Actions
-Cloud Security: IAM, JWT authorization, Cognito, OIDC, CORS, private S3 origins
-DevOps: remote state, state locking, deterministic deployments, Git workflows, infrastructure validation
-Backend: Python, serverless APIs, DynamoDB CRUD
-Frontend: HTML, CSS, JavaScript, REST API integration
+Automate frontend deployment through CI/CD
 
 Author
-Lokesh Repaka
 
+Lokesh Repaka
 Computer Science student focused on Cloud Engineering and DevOps.
