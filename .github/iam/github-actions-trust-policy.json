@@ -10,7 +10,7 @@
             "Condition": {
                 "StringEquals": {
                     "token.actions.githubusercontent.com:aud": "sts.amazonaws.com",
-                    "token.actions.githubusercontent.com:sub": "repo:lokeshrepaaka/aws-serverless-three-tier-app:ref:refs/heads/main"
+                    "token.actions.githubusercontent.com:sub": "repo:lokeshrepaaka@191397485/aws-serverless-three-tier-app@1356470754:ref:refs/heads/main"
                 }
             }
         }
