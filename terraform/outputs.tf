@@ -35,3 +35,12 @@ output "api_endpoint" {
   description = "Base URL of the API Gateway HTTP API"
   value       = aws_apigatewayv2_api.tasks.api_endpoint
 }
+output "cognito_user_pool_id" {
+  description = "ID of the Cognito User Pool"
+  value       = aws_cognito_user_pool.users.id
+}
+
+output "cognito_user_pool_client_id" {
+  description = "ID of the Cognito frontend app client"
+  value       = aws_cognito_user_pool_client.frontend.id
+}

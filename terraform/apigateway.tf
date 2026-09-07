@@ -18,7 +18,8 @@ resource "aws_apigatewayv2_api" "tasks" {
     ]
 
     allow_headers = [
-      "Content-Type"
+      "Content-Type",
+      "Authorization"
     ]
   }
 
@@ -27,6 +28,31 @@ resource "aws_apigatewayv2_api" "tasks" {
     Project     = var.project_name
     Environment = var.environment
     ManagedBy   = "Terraform"
+  }
+}
+
+
+# --------------------------------------------------
+# API Gateway JWT Authorizer
+# --------------------------------------------------
+
+resource "aws_apigatewayv2_authorizer" "cognito" {
+  api_id = aws_apigatewayv2_api.tasks.id
+
+  authorizer_type = "JWT"
+
+  identity_sources = [
+    "$request.header.Authorization"
+  ]
+
+  name = "${var.project_name}-${var.environment}-cognito-authorizer"
+
+  jwt_configuration {
+    audience = [
+      aws_cognito_user_pool_client.frontend.id
+    ]
+
+    issuer = "https://cognito-idp.${var.aws_region}.amazonaws.com/${aws_cognito_user_pool.users.id}"
   }
 }
 
@@ -49,10 +75,12 @@ resource "aws_apigatewayv2_integration" "tasks" {
 # --------------------------------------------------
 
 resource "aws_apigatewayv2_route" "get_tasks" {
-  api_id = aws_apigatewayv2_api.tasks.id
-
+  api_id    = aws_apigatewayv2_api.tasks.id
   route_key = "GET /tasks"
   target    = "integrations/${aws_apigatewayv2_integration.tasks.id}"
+
+  authorization_type = "JWT"
+  authorizer_id      = aws_apigatewayv2_authorizer.cognito.id
 }
 
 
@@ -65,6 +93,9 @@ resource "aws_apigatewayv2_route" "post_tasks" {
 
   route_key = "POST /tasks"
   target    = "integrations/${aws_apigatewayv2_integration.tasks.id}"
+
+  authorization_type = "JWT"
+  authorizer_id      = aws_apigatewayv2_authorizer.cognito.id
 }
 
 
@@ -107,6 +138,7 @@ resource "aws_lambda_permission" "api_gateway" {
   source_arn = "${aws_apigatewayv2_api.tasks.execution_arn}/*/*"
 }
 
+
 # --------------------------------------------------
 # PATCH /tasks/{task_id}
 # --------------------------------------------------
@@ -116,6 +148,9 @@ resource "aws_apigatewayv2_route" "patch_task" {
 
   route_key = "PATCH /tasks/{task_id}"
   target    = "integrations/${aws_apigatewayv2_integration.tasks.id}"
+
+  authorization_type = "JWT"
+  authorizer_id      = aws_apigatewayv2_authorizer.cognito.id
 }
 
 
@@ -128,4 +163,7 @@ resource "aws_apigatewayv2_route" "delete_task" {
 
   route_key = "DELETE /tasks/{task_id}"
   target    = "integrations/${aws_apigatewayv2_integration.tasks.id}"
+
+  authorization_type = "JWT"
+  authorizer_id      = aws_apigatewayv2_authorizer.cognito.id
 }

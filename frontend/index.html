@@ -18,6 +18,33 @@
 
     <hr>
 
+    <!-- ==================================================
+         AUTHENTICATION
+    =================================================== -->
+
+    <h2>Login</h2>
+
+    <input type="email" id="email" placeholder="Email">
+
+    <input type="password" id="password" placeholder="Password">
+
+    <button onclick="login()">
+        Login
+    </button>
+
+    <button onclick="logout()">
+        Logout
+    </button>
+
+    <p id="authMessage">Not logged in</p>
+
+    <hr>
+
+
+    <!-- ==================================================
+         CREATE TASK
+    =================================================== -->
+
     <h2>Create Task</h2>
 
     <input type="text" id="taskTitle" placeholder="Enter a task">
@@ -30,6 +57,11 @@
 
     <hr>
 
+
+    <!-- ==================================================
+         TASK LIST
+    =================================================== -->
+
     <h2>Tasks</h2>
 
     <button onclick="loadTasks()">
@@ -38,218 +70,753 @@
 
     <ul id="taskList"></ul>
 
+
     <script>
+
+        // ==================================================
+        // APPLICATION CONFIGURATION
+        // ==================================================
+
         const API_URL =
             "https://ro08n8xb7l.execute-api.us-east-1.amazonaws.com/tasks";
 
+        const COGNITO_REGION =
+            "us-east-1";
 
-        async function loadTasks() {
-            const taskList = document.getElementById("taskList");
-            const message = document.getElementById("message");
+        const COGNITO_CLIENT_ID =
+            "4elfp699gt0e5e45lv91jpi47a";
+
+        const COGNITO_ENDPOINT =
+            `https://cognito-idp.${COGNITO_REGION}.amazonaws.com/`;
+
+
+        // ==================================================
+        // TOKEN MANAGEMENT
+        // ==================================================
+
+        function getAccessToken() {
+            return sessionStorage.getItem("accessToken");
+        }
+
+
+        function saveAccessToken(token) {
+            sessionStorage.setItem(
+                "accessToken",
+                token
+            );
+        }
+
+
+        function clearAccessToken() {
+            sessionStorage.removeItem(
+                "accessToken"
+            );
+        }
+
+
+        function getAuthHeaders() {
+            const token =
+                getAccessToken();
+
+            if (!token) {
+                return {};
+            }
+
+            return {
+                Authorization:
+                    `Bearer ${token}`
+            };
+        }
+
+
+        // ==================================================
+        // LOGIN
+        // ==================================================
+
+        async function login() {
+
+            const email =
+                document.getElementById("email")
+                    .value
+                    .trim();
+
+            const password =
+                document.getElementById("password")
+                    .value;
+
+            const authMessage =
+                document.getElementById("authMessage");
+
+
+            if (!email || !password) {
+
+                authMessage.textContent =
+                    "Please enter email and password.";
+
+                return;
+            }
+
 
             try {
-                message.textContent = "Loading tasks...";
 
-                const response = await fetch(API_URL);
+                authMessage.textContent =
+                    "Signing in...";
+
+
+                const response =
+                    await fetch(
+                        COGNITO_ENDPOINT,
+                        {
+                            method: "POST",
+
+                            headers: {
+                                "Content-Type":
+                                    "application/x-amz-json-1.1",
+
+                                "X-Amz-Target":
+                                    "AWSCognitoIdentityProviderService.InitiateAuth"
+                            },
+
+                            body: JSON.stringify({
+
+                                AuthFlow:
+                                    "USER_PASSWORD_AUTH",
+
+                                ClientId:
+                                    COGNITO_CLIENT_ID,
+
+                                AuthParameters: {
+                                    USERNAME:
+                                        email,
+
+                                    PASSWORD:
+                                        password
+                                }
+
+                            })
+                        }
+                    );
+
+
+                const data =
+                    await response.json();
+
 
                 if (!response.ok) {
-                    throw new Error("Failed to load tasks");
+
+                    console.error(
+                        "Cognito login error:",
+                        data
+                    );
+
+                    throw new Error(
+                        data.message ||
+                        "Login failed"
+                    );
                 }
 
-                const data = await response.json();
 
-                taskList.innerHTML = "";
-
-                data.tasks.forEach(task => {
-                    const listItem = document.createElement("li");
-
-                    const taskText = document.createElement("span");
-
-                    taskText.textContent =
-                        `${task.title} - ${task.completed ? "Completed" : "Pending"} `;
-
-                    listItem.appendChild(taskText);
+                const accessToken =
+                    data.AuthenticationResult
+                        ?.AccessToken;
 
 
-                    // Only show the Complete button
-                    // when the task is still pending.
-                    if (!task.completed) {
-                        const completeButton =
-                            document.createElement("button");
+                if (!accessToken) {
 
-                        completeButton.textContent =
-                            "Complete";
-
-                        completeButton.onclick = function () {
-                            completeTask(task.task_id);
-                        };
-
-                        listItem.appendChild(completeButton);
-                    }
+                    throw new Error(
+                        "Access token was not returned."
+                    );
+                }
 
 
-                    // Every task can be deleted.
-                    const deleteButton =
-                        document.createElement("button");
+                saveAccessToken(
+                    accessToken
+                );
 
-                    deleteButton.textContent =
-                        "Delete";
 
-                    deleteButton.onclick = function () {
-                        deleteTask(task.task_id);
-                    };
+                authMessage.textContent =
+                    "Login successful.";
 
-                    listItem.appendChild(deleteButton);
 
-                    taskList.appendChild(listItem);
-                });
+                // Clear password field after login.
+                document.getElementById(
+                    "password"
+                ).value = "";
 
-                message.textContent =
-                    `Loaded ${data.tasks.length} task(s).`;
+
+                await loadTasks();
+
 
             } catch (error) {
-                console.error(error);
 
-                message.textContent =
-                    "Error loading tasks.";
+                console.error(
+                    error
+                );
+
+                authMessage.textContent =
+                    "Login failed. Check your email and password.";
             }
         }
 
 
-        async function createTask() {
-            const taskInput =
-                document.getElementById("taskTitle");
+        // ==================================================
+        // LOGOUT
+        // ==================================================
+
+        function logout() {
+
+            clearAccessToken();
+
+            document.getElementById(
+                "authMessage"
+            ).textContent =
+                "Logged out.";
+
+            document.getElementById(
+                "taskList"
+            ).innerHTML =
+                "";
+
+            document.getElementById(
+                "message"
+            ).textContent =
+                "";
+        }
+
+
+        // ==================================================
+        // LOAD TASKS
+        // ==================================================
+
+        async function loadTasks() {
+
+            const taskList =
+                document.getElementById(
+                    "taskList"
+                );
 
             const message =
-                document.getElementById("message");
+                document.getElementById(
+                    "message"
+                );
+
+
+            const token =
+                getAccessToken();
+
+
+            if (!token) {
+
+                message.textContent =
+                    "Please log in to view tasks.";
+
+                return;
+            }
+
+
+            try {
+
+                message.textContent =
+                    "Loading tasks...";
+
+
+                const response =
+                    await fetch(
+                        API_URL,
+                        {
+                            headers: {
+                                ...getAuthHeaders()
+                            }
+                        }
+                    );
+
+
+                if (response.status === 401) {
+
+                    clearAccessToken();
+
+                    document.getElementById(
+                        "authMessage"
+                    ).textContent =
+                        "Session expired. Please log in again.";
+
+                    throw new Error(
+                        "Unauthorized"
+                    );
+                }
+
+
+                if (!response.ok) {
+
+                    throw new Error(
+                        "Failed to load tasks"
+                    );
+                }
+
+
+                const data =
+                    await response.json();
+
+
+                taskList.innerHTML =
+                    "";
+
+
+                data.tasks.forEach(
+                    task => {
+
+                        const listItem =
+                            document.createElement(
+                                "li"
+                            );
+
+
+                        const taskText =
+                            document.createElement(
+                                "span"
+                            );
+
+
+                        taskText.textContent =
+                            `${task.title} - ${task.completed
+                                ? "Completed"
+                                : "Pending"} `;
+
+
+                        listItem.appendChild(
+                            taskText
+                        );
+
+
+                        // Only display Complete
+                        // when task is pending.
+                        if (!task.completed) {
+
+                            const completeButton =
+                                document.createElement(
+                                    "button"
+                                );
+
+
+                            completeButton.textContent =
+                                "Complete";
+
+
+                            completeButton.onclick =
+                                function () {
+
+                                    completeTask(
+                                        task.task_id
+                                    );
+                                };
+
+
+                            listItem.appendChild(
+                                completeButton
+                            );
+                        }
+
+
+                        // Every task can be deleted.
+                        const deleteButton =
+                            document.createElement(
+                                "button"
+                            );
+
+
+                        deleteButton.textContent =
+                            "Delete";
+
+
+                        deleteButton.onclick =
+                            function () {
+
+                                deleteTask(
+                                    task.task_id
+                                );
+                            };
+
+
+                        listItem.appendChild(
+                            deleteButton
+                        );
+
+
+                        taskList.appendChild(
+                            listItem
+                        );
+                    }
+                );
+
+
+                message.textContent =
+                    `Loaded ${data.tasks.length} task(s).`;
+
+
+            } catch (error) {
+
+                console.error(
+                    error
+                );
+
+
+                if (
+                    error.message !==
+                    "Unauthorized"
+                ) {
+
+                    message.textContent =
+                        "Error loading tasks.";
+                }
+            }
+        }
+
+
+        // ==================================================
+        // CREATE TASK
+        // ==================================================
+
+        async function createTask() {
+
+            const taskInput =
+                document.getElementById(
+                    "taskTitle"
+                );
+
+            const message =
+                document.getElementById(
+                    "message"
+                );
+
 
             const title =
                 taskInput.value.trim();
 
+
+            if (!getAccessToken()) {
+
+                message.textContent =
+                    "Please log in first.";
+
+                return;
+            }
+
+
             if (!title) {
+
                 message.textContent =
                     "Please enter a task title.";
 
                 return;
             }
 
+
             try {
+
                 message.textContent =
                     "Creating task...";
 
-                const response = await fetch(API_URL, {
-                    method: "POST",
 
-                    headers: {
-                        "Content-Type": "application/json"
-                    },
+                const response =
+                    await fetch(
+                        API_URL,
+                        {
+                            method:
+                                "POST",
 
-                    body: JSON.stringify({
-                        title: title
-                    })
-                });
+                            headers: {
+
+                                "Content-Type":
+                                    "application/json",
+
+                                ...getAuthHeaders()
+
+                            },
+
+                            body:
+                                JSON.stringify({
+                                    title:
+                                        title
+                                })
+                        }
+                    );
+
+
+                if (response.status === 401) {
+
+                    clearAccessToken();
+
+                    document.getElementById(
+                        "authMessage"
+                    ).textContent =
+                        "Session expired. Please log in again.";
+
+                    throw new Error(
+                        "Unauthorized"
+                    );
+                }
+
 
                 if (!response.ok) {
-                    throw new Error("Failed to create task");
+
+                    throw new Error(
+                        "Failed to create task"
+                    );
                 }
+
 
                 const data =
                     await response.json();
 
+
                 message.textContent =
                     data.message;
+
 
                 taskInput.value =
                     "";
 
+
                 await loadTasks();
 
-            } catch (error) {
-                console.error(error);
 
-                message.textContent =
-                    "Error creating task.";
+            } catch (error) {
+
+                console.error(
+                    error
+                );
+
+
+                if (
+                    error.message !==
+                    "Unauthorized"
+                ) {
+
+                    message.textContent =
+                        "Error creating task.";
+                }
             }
         }
 
 
-        async function completeTask(taskId) {
+        // ==================================================
+        // COMPLETE TASK
+        // ==================================================
+
+        async function completeTask(
+            taskId
+        ) {
+
             const message =
-                document.getElementById("message");
+                document.getElementById(
+                    "message"
+                );
+
+
+            if (!getAccessToken()) {
+
+                message.textContent =
+                    "Please log in first.";
+
+                return;
+            }
+
 
             try {
+
                 message.textContent =
                     "Updating task...";
 
-                const response = await fetch(
-                    `${API_URL}/${taskId}`,
-                    {
-                        method: "PATCH"
-                    }
-                );
+
+                const response =
+                    await fetch(
+                        `${API_URL}/${taskId}`,
+                        {
+                            method:
+                                "PATCH",
+
+                            headers: {
+                                ...getAuthHeaders()
+                            }
+                        }
+                    );
+
+
+                if (response.status === 401) {
+
+                    clearAccessToken();
+
+                    document.getElementById(
+                        "authMessage"
+                    ).textContent =
+                        "Session expired. Please log in again.";
+
+                    throw new Error(
+                        "Unauthorized"
+                    );
+                }
+
 
                 if (!response.ok) {
+
                     throw new Error(
                         "Failed to update task"
                     );
                 }
 
+
                 const data =
                     await response.json();
+
 
                 message.textContent =
                     data.message;
 
+
                 await loadTasks();
 
-            } catch (error) {
-                console.error(error);
 
-                message.textContent =
-                    "Error updating task.";
+            } catch (error) {
+
+                console.error(
+                    error
+                );
+
+
+                if (
+                    error.message !==
+                    "Unauthorized"
+                ) {
+
+                    message.textContent =
+                        "Error updating task.";
+                }
             }
         }
 
 
-        async function deleteTask(taskId) {
+        // ==================================================
+        // DELETE TASK
+        // ==================================================
+
+        async function deleteTask(
+            taskId
+        ) {
+
             const message =
-                document.getElementById("message");
+                document.getElementById(
+                    "message"
+                );
+
+
+            if (!getAccessToken()) {
+
+                message.textContent =
+                    "Please log in first.";
+
+                return;
+            }
+
 
             try {
+
                 message.textContent =
                     "Deleting task...";
 
-                const response = await fetch(
-                    `${API_URL}/${taskId}`,
-                    {
-                        method: "DELETE"
-                    }
-                );
+
+                const response =
+                    await fetch(
+                        `${API_URL}/${taskId}`,
+                        {
+                            method:
+                                "DELETE",
+
+                            headers: {
+                                ...getAuthHeaders()
+                            }
+                        }
+                    );
+
+
+                if (response.status === 401) {
+
+                    clearAccessToken();
+
+                    document.getElementById(
+                        "authMessage"
+                    ).textContent =
+                        "Session expired. Please log in again.";
+
+                    throw new Error(
+                        "Unauthorized"
+                    );
+                }
+
 
                 if (!response.ok) {
+
                     throw new Error(
                         "Failed to delete task"
                     );
                 }
 
+
                 const data =
                     await response.json();
+
 
                 message.textContent =
                     data.message;
 
+
                 await loadTasks();
 
-            } catch (error) {
-                console.error(error);
 
-                message.textContent =
-                    "Error deleting task.";
+            } catch (error) {
+
+                console.error(
+                    error
+                );
+
+
+                if (
+                    error.message !==
+                    "Unauthorized"
+                ) {
+
+                    message.textContent =
+                        "Error deleting task.";
+                }
             }
         }
 
 
-        loadTasks();
+        // ==================================================
+        // PAGE STARTUP
+        // ==================================================
+
+        if (getAccessToken()) {
+
+            document.getElementById(
+                "authMessage"
+            ).textContent =
+                "Logged in.";
+
+            loadTasks();
+
+        } else {
+
+            document.getElementById(
+                "authMessage"
+            ).textContent =
+                "Not logged in.";
+
+            document.getElementById(
+                "message"
+            ).textContent =
+                "Please log in to view tasks.";
+        }
+
     </script>
 
 </body>
