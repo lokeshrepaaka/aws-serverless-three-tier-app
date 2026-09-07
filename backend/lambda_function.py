@@ -1,19 +1,11 @@
 import json
-import logging
 import os
 import uuid
 from datetime import datetime, timezone
 
 import boto3
+from boto3.dynamodb.conditions import Attr
 from botocore.exceptions import ClientError
-
-
-# --------------------------------------------------
-# Logging configuration
-# --------------------------------------------------
-
-logger = logging.getLogger()
-logger.setLevel(logging.INFO)
 
 
 # --------------------------------------------------
@@ -27,7 +19,7 @@ table = dynamodb.Table(TABLE_NAME)
 
 
 # --------------------------------------------------
-# Helper function
+# Helper functions
 # --------------------------------------------------
 
 def build_response(status_code, body):
@@ -41,6 +33,50 @@ def build_response(status_code, body):
         },
         "body": json.dumps(body)
     }
+
+
+def get_authenticated_user_id(event):
+    """
+    Reads the Cognito user's immutable `sub` claim from the JWT
+    that API Gateway has already validated.
+
+    Returns None if the request does not contain a verified JWT context.
+    """
+    return (
+        event.get("requestContext", {})
+        .get("authorizer", {})
+        .get("jwt", {})
+        .get("claims", {})
+        .get("sub")
+    )
+
+
+def get_user_tasks(user_id):
+    """
+    Returns only tasks owned by the authenticated Cognito user.
+
+    The current DynamoDB table uses task_id as its partition key,
+    so this implementation uses a filtered Scan. This keeps the
+    existing table schema unchanged while adding user isolation.
+    """
+    items = []
+
+    scan_kwargs = {
+        "FilterExpression": Attr("owner_id").eq(user_id)
+    }
+
+    while True:
+        response = table.scan(**scan_kwargs)
+        items.extend(response.get("Items", []))
+
+        last_evaluated_key = response.get("LastEvaluatedKey")
+
+        if not last_evaluated_key:
+            break
+
+        scan_kwargs["ExclusiveStartKey"] = last_evaluated_key
+
+    return items
 
 
 # --------------------------------------------------
@@ -57,6 +93,8 @@ def lambda_handler(event, context):
     POST   /tasks
     PATCH  /tasks/{task_id}
     DELETE /tasks/{task_id}
+
+    Every operation is scoped to the authenticated Cognito user.
     """
 
     try:
@@ -67,30 +105,24 @@ def lambda_handler(event, context):
             .get("method")
         )
 
-        # Allows us to test the Lambda directly as well.
+        # Fallback for older/direct test event formats.
         if not http_method:
             http_method = event.get("httpMethod")
 
 
         # --------------------------------------------------
-        # Read task_id from URL
+        # Identify authenticated Cognito user
         # --------------------------------------------------
 
-        path_parameters = event.get("pathParameters") or {}
+        user_id = get_authenticated_user_id(event)
 
-        task_id = path_parameters.get("task_id")
-
-
-        # --------------------------------------------------
-        # Request logging
-        # --------------------------------------------------
-
-        logger.info(
-            "Request received: method=%s task_id=%s request_id=%s",
-            http_method,
-            task_id,
-            context.aws_request_id if context else "unknown"
-        )
+        if not user_id:
+            return build_response(
+                401,
+                {
+                    "message": "Authentication required."
+                }
+            )
 
 
         # --------------------------------------------------
@@ -98,13 +130,12 @@ def lambda_handler(event, context):
         # --------------------------------------------------
 
         if http_method == "GET":
-            response = table.scan()
+            tasks = get_user_tasks(user_id)
 
-            tasks = response.get("Items", [])
-
-            logger.info(
-                "Tasks retrieved successfully: count=%s",
-                len(tasks)
+            # Newest tasks first for a cleaner frontend experience.
+            tasks.sort(
+                key=lambda task: task.get("created_at", ""),
+                reverse=True
             )
 
             return build_response(
@@ -122,13 +153,9 @@ def lambda_handler(event, context):
         if http_method == "POST":
             body = json.loads(event.get("body") or "{}")
 
-            title = body.get("title")
+            title = str(body.get("title") or "").strip()
 
             if not title:
-                logger.warning(
-                    "Task creation rejected: title is missing"
-                )
-
                 return build_response(
                     400,
                     {
@@ -138,6 +165,7 @@ def lambda_handler(event, context):
 
             task = {
                 "task_id": str(uuid.uuid4()),
+                "owner_id": user_id,
                 "title": title,
                 "completed": False,
                 "created_at": datetime.now(timezone.utc).isoformat()
@@ -145,11 +173,6 @@ def lambda_handler(event, context):
 
             table.put_item(
                 Item=task
-            )
-
-            logger.info(
-                "Task created successfully: task_id=%s",
-                task["task_id"]
             )
 
             return build_response(
@@ -162,16 +185,20 @@ def lambda_handler(event, context):
 
 
         # --------------------------------------------------
+        # Read task_id from URL
+        # --------------------------------------------------
+
+        path_parameters = event.get("pathParameters") or {}
+        task_id = path_parameters.get("task_id")
+
+
+        # --------------------------------------------------
         # PATCH /tasks/{task_id}
         # --------------------------------------------------
 
         if http_method == "PATCH":
 
             if not task_id:
-                logger.warning(
-                    "Task update rejected: task_id is missing"
-                )
-
                 return build_response(
                     400,
                     {
@@ -188,10 +215,14 @@ def lambda_handler(event, context):
                     UpdateExpression="SET completed = :completed",
 
                     ExpressionAttributeValues={
-                        ":completed": True
+                        ":completed": True,
+                        ":owner_id": user_id
                     },
 
-                    ConditionExpression="attribute_exists(task_id)",
+                    ConditionExpression=(
+                        "attribute_exists(task_id) "
+                        "AND owner_id = :owner_id"
+                    ),
 
                     ReturnValues="ALL_NEW"
                 )
@@ -201,11 +232,8 @@ def lambda_handler(event, context):
                     error.response["Error"]["Code"]
                     == "ConditionalCheckFailedException"
                 ):
-                    logger.warning(
-                        "Task update failed: task not found task_id=%s",
-                        task_id
-                    )
-
+                    # Deliberately return the same response for a missing
+                    # task and a task owned by another user.
                     return build_response(
                         404,
                         {
@@ -214,11 +242,6 @@ def lambda_handler(event, context):
                     )
 
                 raise
-
-            logger.info(
-                "Task marked as completed: task_id=%s",
-                task_id
-            )
 
             return build_response(
                 200,
@@ -236,10 +259,6 @@ def lambda_handler(event, context):
         if http_method == "DELETE":
 
             if not task_id:
-                logger.warning(
-                    "Task deletion rejected: task_id is missing"
-                )
-
                 return build_response(
                     400,
                     {
@@ -247,39 +266,43 @@ def lambda_handler(event, context):
                     }
                 )
 
-            response = table.delete_item(
-                Key={
-                    "task_id": task_id
-                },
+            try:
+                response = table.delete_item(
+                    Key={
+                        "task_id": task_id
+                    },
 
-                ReturnValues="ALL_OLD"
-            )
+                    ExpressionAttributeValues={
+                        ":owner_id": user_id
+                    },
 
-            deleted_task = response.get("Attributes")
+                    ConditionExpression=(
+                        "attribute_exists(task_id) "
+                        "AND owner_id = :owner_id"
+                    ),
 
-            if not deleted_task:
-                logger.warning(
-                    "Task deletion failed: task not found task_id=%s",
-                    task_id
+                    ReturnValues="ALL_OLD"
                 )
 
-                return build_response(
-                    404,
-                    {
-                        "message": "Task not found."
-                    }
-                )
+            except ClientError as error:
+                if (
+                    error.response["Error"]["Code"]
+                    == "ConditionalCheckFailedException"
+                ):
+                    return build_response(
+                        404,
+                        {
+                            "message": "Task not found."
+                        }
+                    )
 
-            logger.info(
-                "Task deleted successfully: task_id=%s",
-                task_id
-            )
+                raise
 
             return build_response(
                 200,
                 {
                     "message": "Task deleted successfully.",
-                    "task": deleted_task
+                    "task": response.get("Attributes")
                 }
             )
 
@@ -287,11 +310,6 @@ def lambda_handler(event, context):
         # --------------------------------------------------
         # Unsupported HTTP method
         # --------------------------------------------------
-
-        logger.warning(
-            "Unsupported HTTP method: method=%s",
-            http_method
-        )
 
         return build_response(
             405,
@@ -301,10 +319,16 @@ def lambda_handler(event, context):
         )
 
 
-    except Exception:
-        logger.exception(
-            "Unhandled error while processing request"
+    except json.JSONDecodeError:
+        return build_response(
+            400,
+            {
+                "message": "Request body must contain valid JSON."
+            }
         )
+
+    except Exception as error:
+        print(f"Error: {error}")
 
         return build_response(
             500,
